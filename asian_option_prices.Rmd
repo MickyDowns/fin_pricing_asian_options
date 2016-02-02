@@ -1,0 +1,1148 @@
+---
+title: "Pricing Asian Options w/ Variance Reduction"
+author: "Michael Downs"
+date: "December 3, 2015"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+## Price an Asian call option
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+library(fExoticOptions)
+library(fOptions)
+
+percent <- function(x, digits = 2, format = "f", ...) {
+  paste0(formatC(100 * x, format = format, digits = digits, ...), "%")}
+ 
+# value        source
+r=0.05         # question stem
+S0=50          # question stem
+ttm=1          # question stem
+K=50           # question stem
+sigma=0.3      # question stem
+rho=0.5        # question stem
+path.len=32    # question stem
+delta.t=ttm/path.len # calculated
+
+```
+
+*(a) Apply Euler Scheme to estimate $e^{−rT} E[(\bar{S}-K)_+]$ for $\xi=0$ and $\xi= 2$. Give a 95% confidence interval for your estimates.*
+
+Using the Hull & White specification from the question stem, the implmenting formulas from Glasserman (p140) and using $v=0$ and $max(m)=2$, I get the discounted mean price estimate, variance and confidence interval for the Asian call under constant volatility (i.e., $\xi=0$) below. Based on $N \approx 60,000$, these numbers are inline with Glasserman table 5.1.
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. initialize variables
+v.really=0
+xi=0
+v=sigma^2
+N=1000
+y.eul=NULL
+
+# 2. loop on sample to find sigma and N for confidence intervals
+for(j in 1:N){
+     s.eul=S0
+     Z=rnorm(2*path.len,0,1)
+     
+     for(i in 2:path.len){
+          v[i]=min(2,v[i-1]*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*
+                                     (rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i])))
+          
+          # euler discretization
+          s.eul[i]=s.eul[i-1]*(1+r*delta.t+sqrt(v[i]*delta.t)*Z[i])
+     }
+     y.eul[j]=max(mean(s.eul)-K,0)
+}
+sigma.ci=sd(y.eul,na.rm=T); alpha.ci=0.05
+N.ci=(sigma.ci^2/alpha.ci^2)*(qnorm(1-(alpha.ci/2))^2) # N.ci 60k
+
+# 3. processing N.ci iterations
+for(j in 1:N.ci){
+     s.eul=s.glass=S0
+     Z=rnorm(2*path.len,0,1)
+     
+     for(i in 2:path.len){
+          v[i]=min(2,v[i-1]*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*
+                                     (rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i])))
+          
+          s.eul[i]=s.eul[i-1]*(1+r*delta.t+sqrt(v[i]*delta.t)*Z[i])
+     }
+     y.eul[j]=max(mean(s.eul)-K,0)
+}
+
+# 4. output results including confidence interval
+mean(y.eul)*exp(-r*ttm) # 3.85
+var(y.eul)/sqrt(N.ci) # 0.15
+(mean(y.eul)+qnorm(0.95,lower=T)*(sd(y.eul)/sqrt(N.ci)))*exp(-r*ttm)
+(mean(y.eul)-qnorm(0.95,lower=T)*(sd(y.eul)/sqrt(N.ci)))*exp(-r*ttm)
+
+```
+
+Using the same Hull & White specification, but setting $\xi=2$, I get the discounted mean price estimate, variance and confidence interval below based on $N \approx 200,000$. Note: These results are very sensitive to starting $v$ value. The results below are consistent with a $v=sigma^2$ start value. However, results swung +/- $2 when the first $v$ was varied using the Glasserman formulation: $v*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*(rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i]))$.
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 6. initialize variables
+v.really=0
+xi=2
+v=sigma^2
+N=10000
+y.eul=NULL
+
+# 7. loop on sample to find sigma and N for confidence intervals
+for(j in 1:N){
+     s.eul=S0
+     Z=rnorm(2*path.len,0,1)
+     
+     for(i in 2:path.len){
+          v[i]=min(2,v[i-1]*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*
+                                     (rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i])))
+          
+          # euler discretization
+          s.eul[i]=s.eul[i-1]*(1+r*delta.t+sqrt(v[i]*delta.t)*Z[i])
+     }
+     y.eul[j]=max(mean(s.eul)-K,0)
+}
+sigma.ci=sd(y.eul,na.rm=T); alpha.ci=0.05
+N.ci=min((sigma.ci^2/alpha.ci^2)*(qnorm(1-(alpha.ci/2))^2),500000) # N.ci 250k
+
+# 8. process N.ci iterations
+for(j in 1:N.ci){
+     s.eul=s.glass=S0
+     Z=rnorm(2*path.len,0,1)
+     
+     for(i in 2:path.len){
+          v[i]=min(2,v[i-1]*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*
+                                     (rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i])))
+          
+          s.eul[i]=s.eul[i-1]*(1+r*delta.t+sqrt(v[i]*delta.t)*Z[i])
+     }
+     y.eul[j]=max(mean(s.eul)-K,0)
+}
+
+# 9. output results including confidence interval
+mean(y.eul)*exp(-r*ttm)
+var(y.eul)/sqrt(N.ci)
+(mean(y.eul)+qnorm(0.95,lower=T)*(sd(y.eul)/sqrt(N.ci)))*exp(-r*ttm) 
+(mean(y.eul)-qnorm(0.95,lower=T)*(sd(y.eul)/sqrt(N.ci)))*exp(-r*ttm) 
+
+```
+
+\textbf{comments:}
+
+Asian call value estimates using $\xi=0$ can be validated using a variety of packages. Here is the discounted mean price estimate and variance using fOptions monte carlo simulations: 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+library(fOptions)
+
+# ********** validation code
+
+# 11. fOptions monte carlo simulation
+sobolInnovations = function(mcSteps, pathLength, init) {# Create Normal Sobol Innovations:
+     innovations = rnorm.sobol(mcSteps, pathLength, init)
+     innovations }
+
+wienerPath = function(eps) { # Generate the Paths:
+     path = (b-sigma*sigma/2)*delta.t + sigma*sqrt(delta.t)*eps
+     path }
+
+arithmeticAsianPayoff = function(path) { # Compute the Call/Put Payoff Value:
+     SM = mean(S*exp(cumsum(path)))
+     if (TypeFlag == "c") payoff = exp(-r*Time)*max(SM-X, 0)
+     if (TypeFlag == "p") payoff = exp(-r*Time)*max(0, X-SM)
+     payoff }
+
+TypeFlag <- "c"; S <- S0; X <- K; Time <- ttm; sigma=sigma; r <- r; b <- r
+
+# Asian simulation with scrambled random numbers:
+mc = MonteCarloOption(delta.t = delta.t, pathLength = path.len, mcSteps = 5000,
+                      mcLoops = 100, init = TRUE, innovations.gen = sobolInnovations,
+                      path.gen = wienerPath, payoff.calc = arithmeticAsianPayoff, 
+                      antithetic = TRUE, standardization = FALSE, trace = FALSE) # 4.13
+
+mean(mc)*exp(-r*ttm);var(mc)
+
+```
+
+Here, in succession, are the discounted mean price estimates from the Turnbull-Wakeman, Levy Asian and Geometric Average Rate approximations:
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 12. compare w/ turnbull-wakeman approximation
+TurnbullWakemanAsianApproxOption(TypeFlag="c", S=S0, SA=S0, X=K, Time=ttm, time=ttm, 
+                                 tau=0 , r=r, b=r,sigma=sigma)@price #4.00
+
+# 13. compare w/ levy approximation
+LevyAsianApproxOption(TypeFlag="c", S=S0, SA=S0, X=K, Time=ttm, time=ttm, r=r, 
+                      b=r, sigma=sigma)@price #4.00
+
+# 14. compare w/ geomertic average approximation
+GeometricAverageRateOption(TypeFlag="c", S=S0, X=K, Time=ttm, r=r, b=r, 
+                           sigma=sigma)@price #3.75
+
+```
+
+\textbf{code:}
+```{r eval=FALSE,cache=FALSE,echo=TRUE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. initialize variables
+v.really=0
+xi=0 #2
+v=sigma^2
+N=1000
+y.eul=NULL
+
+# 2. loop on sample to find sigma and N for confidence intervals
+for(j in 1:N){
+     s.eul=S0
+     Z=rnorm(2*path.len,0,1)
+     
+     for(i in 2:path.len){
+          v[i]=min(2,v[i-1]*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*
+                                     (rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i])))
+          
+          # euler discretization
+          s.eul[i]=s.eul[i-1]*(1+r*delta.t+sqrt(v[i]*delta.t)*Z[i])
+     }
+     y.eul[j]=max(mean(s.eul)-K,0)
+}
+sigma.ci=sd(y.eul,na.rm=T); alpha.ci=0.05
+N.ci=(sigma.ci^2/alpha.ci^2)*(qnorm(1-(alpha.ci/2))^2) # N.ci 60k
+
+# 3. processing N.ci iterations
+for(j in 1:N.ci){
+     s.eul=s.glass=S0
+     Z=rnorm(2*path.len,0,1)
+     
+     for(i in 2:path.len){
+          v[i]=min(2,v[i-1]*exp((v.really-(1/2)*xi^2)*delta.t+xi*sqrt(delta.t)*
+                                     (rho*Z[i]+sqrt(1-rho^2)*Z[path.len+i])))
+          
+          s.eul[i]=s.eul[i-1]*(1+r*delta.t+sqrt(v[i]*delta.t)*Z[i])
+     }
+     y.eul[j]=max(mean(s.eul)-K,0)
+}
+
+# 4. output results including confidence interval
+mean(y.eul)*exp(-r*ttm) 
+var(y.eul)/sqrt(N.ci)
+(mean(y.eul)+qnorm(0.95,lower=T)*(sd(y.eul)/sqrt(N.ci)))*exp(-r*ttm)
+(mean(y.eul)-qnorm(0.95,lower=T)*(sd(y.eul)/sqrt(N.ci)))*exp(-r*ttm)
+
+# i've omitted validation code as it is not core
+
+```
+
+*(b) Explain how you can improve your estimates (for $\xi=0$ and $\xi=2$) in part (a).*
+
+I looked at applying 6 approaches:
+
+1. Correlation methods: Antithetic Variates, Common Random Numbers and Control Variates
+
+2. Importance methods: Conditional Monte Carlo, Stratified Sampling and Importance Sampling
+
+Note: classifiction per J. Wilson, "Variance Reduction Techniques for Digitial Simulation", *American Journal of Mathmatical Sciences*, 1984. 
+
+### Correlation Methods
+
+*Antithetic Variates*
+
+As seen in assignment 3, use of antithetic variates leads to a reduction in variance. The results below show the discounted mean price estimate and variance \textbf{with} antithetic pairs, followed by the same \textbf{without} antithetic pairs, followed by the percent improvement with antithetics over without antithetics. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. euler scheme mirroring rnorm vars
+dEulNormMir=function(s0,r,sigma,path.len,delta.t,anti=FALSE){
+     s.vals=s.vals.anti=s0
+     rand.vars=rnorm(path.len,0,1)
+     for(i in 1:path.len){
+          s.vals[i+1]=s.vals[i]+(r*s.vals[i]*delta.t)+
+               (sigma*s.vals[i]*sqrt(delta.t)*rand.vars[i])
+          
+          s.vals.anti[i+1]=s.vals.anti[i]+(r*s.vals.anti[i]*delta.t)-
+               (sigma*s.vals.anti[i]*sqrt(delta.t)*rand.vars[i])}
+     
+     if(anti){s.vals=cbind(s.vals,s.vals.anti)}
+     return(s.vals)
+}
+
+# 2. function to calculate asian call prices using antithetic variates
+callAntithetics=function(n,s0,sigma,path.len,ttm,delta.t,k,anti=FALSE,dis=NULL){
+     end.p=NULL
+     for(i in 1:n){
+          # discretize path w/ or w/out antithetics
+          if(dis=="dEulNormMir"){s.dis=dEulNormMir(s0,r,sigma,path.len,delta.t,anti=anti)}
+          else if(dis=="dMilNormMir"){s.dis=dMilNormMir(s0,r,sigma,path.len,delta.t,anti=anti)}
+          
+          if(!anti){
+               mn.s=mean(s.dis)
+               if(mn.s>k){end.p[i]=mn.s-k}else{end.p[i]=0}
+          } else{
+               mn.s1=mean(s.dis[,1]);mn.s2=mean(s.dis[,2])
+               if(mn.s1>k){end.p1=mn.s1-k}else{end.p1=0}
+               if(mn.s2>k){end.p2=mn.s2-k}else{end.p2=0}
+               end.p[i]=mean(c(end.p1,end.p2))
+          }
+     }
+     return(end.p)
+}
+
+# 3. loop on sample finding sigma and N WITH antithetic pairs
+end.p=callAntithetics(100,S0,sigma,floor(ttm/delta.t),ttm,delta.t,K,anti=TRUE,dis="dEulNormMir")
+sigma.ci=sd(end.p,na.rm=T); alpha.ci=0.05
+N.ci=(sigma.ci^2/alpha.ci^2)*(qnorm(1-(alpha.ci/2))^2) # N.ci 50k
+
+# 4. processing N.ci iterations WITH antithetic pairs
+end.p=callAntithetics(N.ci,S0,sigma,floor(ttm/delta.t),ttm,delta.t,K,anti=TRUE,dis="dEulNormMir")
+with.mn=mean(end.p,na.rm=T)*exp(-r*ttm);with.mn # 3.9
+with.var=var(end.p,na.rm=T)/sqrt(N.ci);with.var # 0.1
+
+# 5. processing N.ci iterations WITHOUT antithetic pairs
+end.p=callAntithetics(N.ci,S0,sigma,floor(ttm/delta.t),ttm,delta.t,K,anti=FALSE,dis="dEulNormMir")
+wout.mn=mean(end.p,na.rm=T)*exp(-r*ttm);wout.mn # 3.9
+wout.var=var(end.p,na.rm=T)/sqrt(N.ci);wout.var # 0.4
+
+percent((wout.var-with.var)/wout.var) # 70%
+
+```
+
+\textbf{code:}
+```{r eval=FALSE,cache=FALSE,echo=TRUE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. euler scheme mirroring rnorm vars
+dEulNormMir=function(s0,r,sigma,path.len,delta.t,anti=FALSE){
+     s.vals=s.vals.anti=s0
+     rand.vars=rnorm(path.len,0,1)
+     for(i in 1:path.len){
+          s.vals[i+1]=s.vals[i]+(r*s.vals[i]*delta.t)+
+               (sigma*s.vals[i]*sqrt(delta.t)*rand.vars[i])
+          
+          s.vals.anti[i+1]=s.vals.anti[i]+(r*s.vals.anti[i]*delta.t)-
+               (sigma*s.vals.anti[i]*sqrt(delta.t)*rand.vars[i])}
+     
+     if(anti){s.vals=cbind(s.vals,s.vals.anti)}
+     return(s.vals)
+}
+
+# 2. function to calculate asian call prices using antithetic variates
+callAntithetics=function(n,s0,sigma,path.len,ttm,delta.t,k,anti=FALSE,dis=NULL){
+     end.p=NULL
+     for(i in 1:n){
+          # discretize path w/ or w/out antithetics
+          if(dis=="dEulNormMir"){s.dis=dEulNormMir(s0,r,sigma,path.len,delta.t,anti=anti)}
+          else if(dis=="dMilNormMir"){s.dis=dMilNormMir(s0,r,sigma,path.len,delta.t,anti=anti)}
+          
+          if(!anti){
+               mn.s=mean(s.dis)
+               if(mn.s>k){end.p[i]=mn.s-k}else{end.p[i]=0}
+          } else{
+               mn.s1=mean(s.dis[,1]);mn.s2=mean(s.dis[,2])
+               if(mn.s1>k){end.p1=mn.s1-k}else{end.p1=0}
+               if(mn.s2>k){end.p2=mn.s2-k}else{end.p2=0}
+               end.p[i]=mean(c(end.p1,end.p2))
+          }
+     }
+     return(end.p)
+}
+
+# 3. loop on sample finding sigma and N WITH antithetic pairs
+end.p=callAntithetics(100,S0,sigma,floor(ttm/delta.t),ttm,delta.t,K,anti=TRUE,dis="dEulNormMir")
+sigma.ci=sd(end.p,na.rm=T); alpha.ci=0.05
+N.ci=(sigma.ci^2/alpha.ci^2)*(qnorm(1-(alpha.ci/2))^2) # N.ci 50k
+
+# 4. processing N.ci iterations WITH antithetic pairs
+end.p=callAntithetics(N.ci,S0,sigma,floor(ttm/delta.t),ttm,delta.t,K,anti=TRUE,dis="dEulNormMir")
+with.mn=mean(end.p,na.rm=T)*exp(-r*ttm);with.mn # 3.9
+with.var=var(end.p,na.rm=T)/sqrt(N.ci);with.var # 0.2
+
+# 5. processing N.ci iterations WITHOUT antithetic pairs
+end.p=callAntithetics(N.ci,S0,sigma,floor(ttm/delta.t),ttm,delta.t,K,anti=FALSE,dis="dEulNormMir")
+wout.mn=mean(end.p,na.rm=T)*exp(-r*ttm);wout.mn # 3.9
+wout.var=var(end.p,na.rm=T)/sqrt(N.ci);wout.var # 0.2
+
+percent((wout.var-with.var)/wout.var) # 70%
+
+
+```
+
+*Common Random Numbers*
+
+While both *antithetic variates* and *common random numbers* are used to introduce positive and negative response correlations by forcing stochastic dependence among the input vectors, their usage differs. *Antithetic variates* are used to minimize the variance from using different paths based on the same underlying process (i.e., $Y^*=\frac{1}{2}(Y_1+Y_2)$). In contrast, *common random numbers* are used to minimize the variance of estimates from alternative processes (i.e., $Y^*=Y_1-Y_2$). In this case, the discretization and call valuation processes are static. Further, the objective is mean variance reduction. Therefore, use of *antithetic variates* is a more appropriate variance reduction method than *common random numbers*.
+
+
+*Control Variates*
+
+I selected $S_T$, $S_\mu$ and the vanilla call value ($C_{ST}$) as control variates based on the *Control Variate* lecture slide. I then ran $N=10,000$ simulations calculating the control variates and corresponding asian call price. The discounted asian call price and call price variance (henceforth referred to as the \textbf{"baseline variance estimate"}) are below.
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. estimate X candidates
+N=10000; st=sm=c.st=NULL
+for(i in 1:N){st[i]=tail(dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE),n=1)}
+for(i in 1:N){sm[i]=mean(dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE))}
+c.st=st-K; c.st[c.st<0]=0
+
+# 2. estimate Y baseline
+c.sm=sm-K; c.sm[c.sm<0]=0
+c.sm.mn=exp(-r*ttm)*mean(c.sm);c.sm.mn # 3.9
+c.sm.var=var(c.sm)/sqrt(N);c.sm.var # 0.4
+
+```
+
+I then calculated the correlation ($\rho$) between the asian call price and the control variates. The results below, beginning with $S_T$, followed by $S_\mu$ and $C_{ST}$, suggest $S_\mu$ will be the best control variate. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 3. calculate x.mn
+st.mn=mean(st) # 52.5
+sm.mn=mean(sm) # 51.5
+c.st.mn=exp(-r*ttm)*mean(c.st) # 7.0
+
+# 4. check correlations - choose X such that a. explicitly computed, b. significant correlation w/ Y
+cor(c.sm,st) 
+cor(c.sm,sm) 
+cor(c.sm,c.st) 
+
+```
+
+Using the results of the $N=10,000$ simulations, I calculate the linear transformation variable, $b$. I then use $b$ in a further 10,000 simulations to predict $z$ (the unknown deviation) by performing a linear transformation of the known deviation between the discretized value and its prior mean. I then subtract $z$ from the price estimate to derive the final price estimate net of the predicted unknown deviation. The discounted mean price and variance estimates are below beginning with the $S_T$ control variate, followed by the $S_M$ control variate, followed by the $C_{ST}$ control variate. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 5. revised asian call function to estimate Y using SM, X and b
+callControl=function(n,s0,sigma,path.len,ttm,delta.t,k,dis=NULL,z.typ=NULL,b,x.mn){
+     end.p=NULL;z=NULL
+     for(i in 1:n){
+          # discretize path w/ or w/out antithetics
+          if(dis=="dEulNormMir"){s.dis=dEulNormMir(s0,r,sigma,path.len,delta.t)}
+          else if(dis=="dMilNormMir"){s.dis=dMilNormMir(s0,r,sigma,path.len,delta.t)}
+          
+          mn.s=mean(s.dis)
+          if(z.typ=="st"){z[i]=-b*(tail(s.dis,1)-x.mn)
+          }else if(z.typ=="sm"){z[i]=-b*(mean(s.dis)-x.mn)
+          }else if(z.typ=="c.st"){
+               c.st=max(tail(s.dis,1)-k,0)
+               z[i]=-b*(c.st-x.mn)}
+          end.p[i]=max(mn.s-k,0)+z[i]
+     }
+     return(end.p)
+}
+
+# 6. process ST
+b.hat=sum((st-st.mn)*(c.sm-c.sm.mn))/sum((st-st.mn)^2)
+mc=callControl(N,S0,sigma,path.len,ttm,delta.t,K,dis="dEulNormMir",z.typ="st",b=b.hat,x.mn=st.mn)
+exp(-r*ttm)*mean(mc) # 3.95
+var(mc)/sqrt(N) # 0.38
+
+# 7. process SM
+b.hat=sum((sm-sm.mn)*(c.sm-c.sm.mn))/sum((sm-sm.mn)^2)
+mc=callControl(N,S0,sigma,path.len,ttm,delta.t,K,dis="dEulNormMir",z.typ="sm",b=b.hat,x.mn=sm.mn)
+exp(-r*ttm)*mean(mc) # 3.99
+cv.sm.var=var(mc)/sqrt(N);cv.sm.var # 0.07
+
+# 8. process C.ST
+b.hat=sum((c.st-c.st.mn)*(c.sm-c.sm.mn))/sum((c.st-c.st.mn)^2)
+mc=callControl(N,S0,sigma,path.len,ttm,delta.t,K,dis="dEulNormMir",z.typ="c.st",b=b.hat,x.mn=c.st.mn)
+exp(-r*ttm)*mean(mc) # 3.93
+var(mc)/sqrt(N) # 0.38
+
+```
+
+The results show little, if any, variance reduction over the baseline variance estimate from using $S_T$ and $C_{ST}$ control variates. However, there is significant improvement when the $S_\mu$ control variate is used. These findings support the two key criteria for control variate selection discussed in class i.e., that they can be computed explicitly and that they are significantly correlated with $Y$ (the asian call price). The percent variance reduction from using $S_\mu$ control variate over the baseline variance estimate is:
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+percent((c.sm.var-cv.sm.var)/c.sm.var) # 82%
+
+```
+
+\textbf{code:}
+```{r eval=FALSE,cache=FALSE,echo=TRUE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. estimate X candidates
+N=10000; st=sm=c.st=NULL
+for(i in 1:N){st[i]=tail(dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE),n=1)}
+for(i in 1:N){sm[i]=mean(dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE))}
+c.st=st-K; c.st[c.st<0]=0
+
+# 2. estimate Y baseline
+c.sm=sm-K; c.sm[c.sm<0]=0
+c.sm.mn=exp(-r*ttm)*mean(c.sm);c.sm.mn # 3.9
+c.sm.var=var(c.sm)/sqrt(N);c.sm.var # 0.4
+
+# 3. calculate x.mn
+st.mn=mean(st) # 52.5
+sm.mn=mean(sm) # 51.5
+c.st.mn=exp(-r*ttm)*mean(c.st) # 7.0
+
+# 4. check correlations - choose X s.t. a. explicitly computed, b. significant correlation w/ Y
+cor(c.sm,st) 
+cor(c.sm,sm) 
+cor(c.sm,c.st) 
+
+# 5. revised asian call function to estimate Y using SM, X and b
+callControl=function(n,s0,sigma,path.len,ttm,delta.t,k,dis=NULL,z.typ=NULL,b,x.mn){
+     end.p=NULL;z=NULL
+     for(i in 1:n){
+          # discretize path w/ or w/out antithetics
+          if(dis=="dEulNormMir"){s.dis=dEulNormMir(s0,r,sigma,path.len,delta.t)}
+          else if(dis=="dMilNormMir"){s.dis=dMilNormMir(s0,r,sigma,path.len,delta.t)}
+          
+          mn.s=mean(s.dis)
+          if(z.typ=="st"){z[i]=-b*(tail(s.dis,1)-x.mn)
+          }else if(z.typ=="sm"){z[i]=-b*(mean(s.dis)-x.mn)
+          }else if(z.typ=="c.st"){
+               c.st=max(tail(s.dis,1)-k,0)
+               z[i]=-b*(c.st-x.mn)}
+          end.p[i]=max(mn.s-k,0)+z[i]
+     }
+     return(end.p)
+}
+
+# 6. process ST
+b.hat=sum((st-st.mn)*(c.sm-c.sm.mn))/sum((st-st.mn)^2)
+mc=callControl(N,S0,sigma,path.len,ttm,delta.t,K,dis="dEulNormMir",z.typ="st",b=b.hat,x.mn=st.mn)
+exp(-r*ttm)*mean(mc) # 3.95
+var(mc)/sqrt(N) # 0.38
+
+# 7. process SM
+b.hat=sum((sm-sm.mn)*(c.sm-c.sm.mn))/sum((sm-sm.mn)^2)
+mc=callControl(N,S0,sigma,path.len,ttm,delta.t,K,dis="dEulNormMir",z.typ="sm",b=b.hat,x.mn=sm.mn)
+exp(-r*ttm)*mean(mc) # 3.99
+cv.sm.var=var(mc)/sqrt(N);cv.sm.var # 0.07
+
+# 8. process C.ST
+b.hat=sum((c.st-c.st.mn)*(c.sm-c.sm.mn))/sum((c.st-c.st.mn)^2)
+mc=callControl(N,S0,sigma,path.len,ttm,delta.t,K,dis="dEulNormMir",z.typ="c.st",b=b.hat,x.mn=c.st.mn)
+exp(-r*ttm)*mean(mc) # 3.93
+var(mc)/sqrt(N) # 0.38
+
+percent((c.sm.var-cv.sm.var)/c.sm.var) # 82%
+
+```
+
+### Importance Methods
+
+*Conditional Monte Carlo*
+
+I can think of two ways to apply conditional monte carlo to this problem. First, as in lecture slide, I can:
+
+1. assume two independent, risky assets $S_t^{(receive)}$ and $S_t^{(pay)}$,
+2. model the conditional probability of $S_t^{(receive)}$ in terms of $S_t^{(pay)}$,
+3. simulate $S_t^{(pay)}$,
+4. calculate expected value for $S_t^{(receive)}$ based on simulation results and conditional probability of $S_t^{(pay)}$.
+
+Unfortunately, this approach is not analogous to the cash flows under an asian call. For an asian call, $S_t^{(pay)}$ cash flows, namely today's call price and the effect of the future stike price, are known at the time of contracting. Therefore, $S_t^{(pay)}$ is not a risky asset that can be simulated. It is more like two payments on a risk-free bond that will be swapped for a single risky asset $S_t^{(receive)}$. 
+
+The second way to us conditional monte carlo would be to find an easily calculated and accurately predictive proxy for the asian call value. I try this approach below by first generating 1,000 Euler paths, then calculating three "predictors" (*path sigma*, *vanilla call value* and *asian call value*) for each. I then create a matrix with rough conditional probabilities by binning these values into 100 quantile bins and associating them with their asian call prices. That results in a data frame that looks like:
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. sample n monte carlos generating st, sm and s.sigma "predictors"
+N=1000; st=sm=s.sigma=NULL
+for(i in 1:N){s=dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE)
+              st[i]=tail(s,n=1)
+              sm[i]=mean(s)
+              s.sigma[i]=sd(s)/sqrt(N)}
+
+# 2. calculate vanilla and asian call values
+c.st=st-K; c.st[c.st<0]=0
+c.sm=sm-K; c.sm[c.sm<0]=0
+
+# 3. calculate conditional expectation associating predictor quantile w/ asian call value
+qtl.tmp.1=quantile(s.sigma,probs=seq(0,1,0.01))
+sigma.qtl=NULL;for(i in 1:N){sigma.qtl[i]=max(qtl.tmp.1[qtl.tmp.1<=s.sigma[i]])}
+
+qtl.tmp.2=quantile(c.st,probs=seq(0,1,0.01))
+c.st.qtl=NULL;for(i in 1:N){c.st.qtl[i]=max(qtl.tmp.2[qtl.tmp.2<=c.st[i]])}
+
+qtl.tmp.3=quantile(c.sm,probs=seq(0,1,0.01))
+c.sm.qtl=NULL;for(i in 1:N){c.sm.qtl[i]=max(qtl.tmp.3[qtl.tmp.3<=c.sm[i]])}
+
+prd=as.data.frame(cbind(c.sm,sigma.qtl,c.st.qtl,c.sm.qtl))
+
+head(prd)
+
+```
+
+I then run another 1,000 simulations generating a new set of *path sigma*, *vanilla call* and *asian call* predictors. These "X" values will be used to predict asian call values using the "binned" prior probabilities. As can be seen in the graphics below, densities for the distribution used to generate the prior probabiliies and for these "X" values are similar.  
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+par(mfrow=c(1,3))
+plot(density(s.sigma),lwd=2,main="density: path sigma")
+
+# 4. simulate st2
+N=1000; st=sm=s.sigma=NULL
+for(i in 1:N){s=dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE)
+              st[i]=tail(s,n=1)
+              sm[i]=mean(s)
+              s.sigma[i]=sd(s)/sqrt(N)}
+
+lines(density(s.sigma),col="red",lwd=2)
+
+plot(density(c.st),lwd=2,main="density: vanilla call")
+c.st=st-K; c.st[c.st<0]=0
+lines(density(c.st),col="red",lwd=2)
+legend("topright",legend=c("for prior probs","for 'X' values"),col=c("black","red"),lwd=2,cex=1)
+
+plot(density(c.sm),lwd=2,main="density: asian call")
+c.sm=sm-K; c.sm[c.sm<0]=0
+lines(density(c.sm),col="red",lwd=2)
+
+```
+
+I then predict the asian call value by taking the mean of the predicted values across all 1,000 runs. The results below show the discounted mean price and the variance of the predictions for the *path sigma*, *vanilla call* and *asian call* predictors, respectively. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 5. calculate st1
+mean(prd$c.sm[prd$sigma.qtl==max(qtl.tmp.1[qtl.tmp.1<=mean(s.sigma)])])*exp(-r*ttm)
+var(prd$c.sm[prd$sigma.qtl==max(qtl.tmp.1[qtl.tmp.1<=mean(s.sigma)])])/sqrt(N)
+
+mean(prd$c.sm[prd$c.st.qtl==max(qtl.tmp.2[qtl.tmp.2<=mean(c.st)])])*exp(-r*ttm)
+var(prd$c.sm[prd$c.st.qtl==max(qtl.tmp.2[qtl.tmp.2<=mean(c.st)])])/sqrt(N)
+
+sm.ci.mn=mean(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])*exp(-r*ttm);sm.ci.mn
+sm.ci.var=var(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])/sqrt(N);sm.ci.var
+
+sm.ci.1=(mean(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])+
+      qnorm(0.95,lower=T)*(sd(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])/
+                                sqrt(N)))*exp(-r*ttm) # 3.96
+sm.ci.2=(mean(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])-
+      qnorm(0.95,lower=T)*(sd(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])/
+                                sqrt(N)))*exp(-r*ttm) # 3.96
+
+```
+
+I next compare the results attained using the three conditional predictors to those attained by just using the $2*1,000$ simulations to calculate the value of the asian call option directly. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 6. compare to just running 2,000
+N=2000; st=sm=s.sigma=NULL
+for(i in 1:N){s=dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE)
+              st[i]=tail(s,n=1)
+              sm[i]=mean(s)
+              s.sigma[i]=sd(s)/sqrt(N)}
+
+c.sm=sm-K; c.sm[c.sm<0]=0
+
+mean(c.sm)*exp(-r*ttm)
+var(c.sm)/sqrt(N)
+
+```
+
+These results indicate a number of things. First, while *path sigma* appears to be predictive of asian call value, it alone is not an accurate predictor. To increase accuracy, we would need to add more predictors (such as $S_0$, $path.len$... $S_\mu$), each with their own conditional probability distributions. However, at some point we would have just re-constituted the asian call pricing model. 
+
+We can see the effect of increasing predictors by looking at the *vanilla call* and *asian call* predictor results. These two composite predictors embody an increasingly (*path sigma* $\rightarrow$ *vanilla call* $\rightarrow$ *asian call*) more comprehensive set of predictors. By comparing their results, we see that, with all other predictors held constant, $S_T$ is a poor substitute for $S_\mu$ when trying to predict asian call prices. 
+
+Finally, we can see that the *asian call* predictor is a relatively accurate predictor of asian call values. This is not surprising. What is surprising is the dramatic reduction in variance. Unfortunately, in this case the conditional distribution of $X$ given $y$ is the distribution of $y$. Therefore, this reduction in variance is likely less due to conditional monte carlo simulation and likely more due to forced normalization of the price distribution resulting from binning  predictors into 100 quantile bins. 
+
+Below is the percent variance improvement using the binned *asian call* predictors vs. the asian call simulation prices followed by the confidence intervals for the two calculation methods.
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+percent(((var(c.sm)/sqrt(N))-sm.ci.var)/(var(c.sm)/sqrt(N))) # 99.9
+
+sm.ci.1 # 3.87
+sm.ci.2 # 3.85
+
+(mean(c.sm)+qnorm(0.95,lower=T)*(sd(c.sm)/sqrt(N)))*exp(-r*ttm) # 4.1
+(mean(c.sm)-qnorm(0.95,lower=T)*(sd(c.sm)/sqrt(N)))*exp(-r*ttm) # 3.7
+
+```
+
+\textbf{code:}
+```{r eval=FALSE,cache=FALSE,echo=TRUE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. sample n monte carlos generating st, sm and s.sigma "predictors"
+N=1000; st=sm=s.sigma=NULL
+for(i in 1:N){s=dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE)
+              st[i]=tail(s,n=1)
+              sm[i]=mean(s)
+              s.sigma[i]=sd(s)/sqrt(N)}
+
+# 2. calculate vanilla and asian call values
+c.st=st-K; c.st[c.st<0]=0
+c.sm=sm-K; c.sm[c.sm<0]=0
+
+# 3. calculate conditional expectation associating predictor quantile w/ asian call value
+qtl.tmp.1=quantile(s.sigma,probs=seq(0,1,0.01))
+sigma.qtl=NULL;for(i in 1:N){sigma.qtl[i]=max(qtl.tmp.1[qtl.tmp.1<=s.sigma[i]])}
+
+qtl.tmp.2=quantile(c.st,probs=seq(0,1,0.01))
+c.st.qtl=NULL;for(i in 1:N){c.st.qtl[i]=max(qtl.tmp.2[qtl.tmp.2<=c.st[i]])}
+
+qtl.tmp.3=quantile(c.sm,probs=seq(0,1,0.01))
+c.sm.qtl=NULL;for(i in 1:N){c.sm.qtl[i]=max(qtl.tmp.3[qtl.tmp.3<=c.sm[i]])}
+
+prd=as.data.frame(cbind(c.sm,sigma.qtl,c.st.qtl,c.sm.qtl))
+
+head(prd)
+
+par(mfrow=c(1,3))
+plot(density(s.sigma),lwd=2,main="density: path sigma")
+
+# 4. simulate st2
+N=1000; st=sm=s.sigma=NULL
+for(i in 1:N){s=dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE)
+              st[i]=tail(s,n=1)
+              sm[i]=mean(s)
+              s.sigma[i]=sd(s)/sqrt(N)}
+
+lines(density(s.sigma),col="red",lwd=2)
+
+plot(density(c.st),lwd=2,main="density: vanilla call")
+c.st=st-K; c.st[c.st<0]=0
+lines(density(c.st),col="red",lwd=2)
+legend("topright",legend=c("for prior probs","for 'X' values"),col=c("black","red"),lwd=2,cex=1)
+
+plot(density(c.sm),lwd=2,main="density: asian call")
+c.sm=sm-K; c.sm[c.sm<0]=0
+lines(density(c.sm),col="red",lwd=2)
+
+# 5. calculate st1
+mean(prd$c.sm[prd$sigma.qtl==max(qtl.tmp.1[qtl.tmp.1<=mean(s.sigma)])])*exp(-r*ttm)
+var(prd$c.sm[prd$sigma.qtl==max(qtl.tmp.1[qtl.tmp.1<=mean(s.sigma)])])/sqrt(N)
+
+mean(prd$c.sm[prd$c.st.qtl==max(qtl.tmp.2[qtl.tmp.2<=mean(c.st)])])*exp(-r*ttm)
+var(prd$c.sm[prd$c.st.qtl==max(qtl.tmp.2[qtl.tmp.2<=mean(c.st)])])/sqrt(N)
+
+sm.ci.mn=mean(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])*exp(-r*ttm);sm.ci.mn
+sm.ci.var=var(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])/sqrt(N);sm.ci.var
+
+sm.ci.1=(mean(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])+
+      qnorm(0.95,lower=T)*(sd(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])/
+                                sqrt(N)))*exp(-r*ttm) # 3.96
+sm.ci.2=(mean(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])-
+      qnorm(0.95,lower=T)*(sd(prd$c.sm[prd$c.sm.qtl==max(qtl.tmp.3[qtl.tmp.3<=mean(c.sm)])])/
+                                sqrt(N)))*exp(-r*ttm) # 3.96
+
+# 6. compare to just running 2,000
+N=2000; st=sm=s.sigma=NULL
+for(i in 1:N){s=dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE)
+              st[i]=tail(s,n=1)
+              sm[i]=mean(s)
+              s.sigma[i]=sd(s)/sqrt(N)}
+
+c.sm=sm-K; c.sm[c.sm<0]=0
+
+mean(c.sm)*exp(-r*ttm)
+var(c.sm)/sqrt(N)
+
+percent(((var(c.sm)/sqrt(N))-sm.ci.var)/(var(c.sm)/sqrt(N))) # 99.9
+
+sm.ci.1 # 3.87
+sm.ci.2 # 3.85
+
+(mean(c.sm)+qnorm(0.95,lower=T)*(sd(c.sm)/sqrt(N)))*exp(-r*ttm) # 4.1
+(mean(c.sm)-qnorm(0.95,lower=T)*(sd(c.sm)/sqrt(N)))*exp(-r*ttm) # 3.7
+
+```
+
+*Stratified Sampling*
+
+I generate $S_M$ by saving the means from 10,000 Euler paths and using those means to estimate the price of an asian call and the price variance (henceforth known as the \textbf{"baseline asian call variance"}. Those values are below. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. simulate 10,000 ST outcomes
+N=10000; sm.all=NULL
+for(i in 1:N){sm.all[i]=mean(dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE))}
+
+# 2. estimate Y baseline
+c.sm=sm.all-K; c.sm[c.sm<0]=0
+c.sm.mn=exp(-r*ttm)*mean(c.sm);c.sm.mn # 3.97
+c.sm.var=var(c.sm)/sqrt(N);c.sm.var # 0.4
+
+```
+
+I then sample 1,000 means from the 10,000 $S_M$'s, split the sample into two mutually exclusive regions ($S_\mu<K$ and $S_\mu>K$), and calculate $\omega$, the probability of being in each region. I then find the optimal sample size for each region using $\omega$ and the standard deviation of $S_\mu$'s in each region. Those sample sizes are below beginning with the $S_\mu<K$ region followed by the $S_\mu>K$ region. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 3. split sample of 1,000 out of 10,000
+smpl=sample(1:10000,1000,replace=F)
+sm1=sm.all[smpl];sm2=sm.all[-smpl]
+
+# 4. split first sample into two mutually exclusive regions - calc prob of each
+d.zv=sm1[sm1<K];d.pv=sm1[sm1>K]
+o.zv=length(d.zv);o.pv=length(d.pv)
+omega.zv=o.zv/length(sm1);omega.pv=o.pv/length(sm1)
+
+# 5. find optimal n using region prob and standard deviation
+n.zv=length(sm1)*((omega.zv*sd(d.zv))/((omega.zv*sd(d.zv))+(omega.pv*sd(d.pv))));n.zv
+n.pv=length(sm1)*((omega.pv*sd(d.pv))/((omega.zv*sd(d.zv))+(omega.pv*sd(d.pv))));n.pv
+
+```
+
+I then take samples with appropriate constraints ($S_\mu<K$, $S_\mu>K$) and sizes from the original distribution (net of 1,000 taken for prior sample), define functions valuing results for each region i.e., $0 value for $S_\mu<K$ and $S_\mu-K$ for $S_\mu>K$, and calculate the discounted expected asian call price and variance. Those values are below beginnning with price followed by variance:
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 6. sample each region
+d.zv.samp=sample(sm2[sm2<K],n.zv,replace=F)
+d.pv.samp=sample(sm2[sm2>K],n.pv,replace=F)
+
+# 7. define functions for each region
+f.zv=function(ST.in) ST.in*0
+f.pv=function(ST.in,k) ST.in-k
+
+# 8. estimate y
+y.hat=exp(-r*ttm)*sum(omega.zv*mean(f.zv(d.zv)),omega.pv*mean(f.pv(d.pv,K)));y.hat
+y.hat.var=sum(omega.zv^2/n.zv * var(d.zv.samp),omega.pv^2/n.pv * var(d.pv.samp));y.hat.var
+
+```
+
+Finally, I calculate the percent variance reduction over both the baseline asian call variance which was calculated using $N= 10,000$, and the percent improvement over a revised estimate using $N=1,000$ corresponding to the stratified sample size. Those results are below:
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 9. compare to baseline
+percent((c.sm.var-y.hat.var)/c.sm.var) # 93%
+
+# 10. compare to 
+valid.samp=sample(sm2,1000,replace=F)
+cv.sm=valid.samp-K; c.sm[cv.sm<0]=0
+cv.sm.mn=exp(-r*ttm)*mean(cv.sm) # 3.92
+cv.sm.var=var(cv.sm)/sqrt(N) # 0.44
+percent((cv.sm.var-y.hat.var)/cv.sm.var) # 96%
+
+```
+
+\textbf{code:}
+```{r eval=FALSE,cache=FALSE,echo=TRUE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. simulate 10,000 ST outcomes
+N=10000; sm.all=NULL
+for(i in 1:N){sm.all[i]=mean(dEulNormMir(S0,r,sigma,path.len,delta.t,anti=FALSE))}
+
+# 2. estimate Y baseline
+c.sm=sm.all-K; c.sm[c.sm<0]=0
+c.sm.mn=exp(-r*ttm)*mean(c.sm);c.sm.mn # 3.97
+c.sm.var=var(c.sm)/sqrt(N);c.sm.var # 0.4
+
+# 3. split sample of 1,000 out of 10,000
+smpl=sample(1:10000,1000,replace=F)
+sm1=sm.all[smpl];sm2=sm.all[-smpl]
+
+# 4. split first sample into two mutually exclusive regions - calc prob of each
+d.zv=sm1[sm1<K];d.pv=sm1[sm1>K]
+o.zv=length(d.zv);o.pv=length(d.pv)
+omega.zv=o.zv/length(sm1);omega.pv=o.pv/length(sm1)
+
+# 5. find optimal n using region prob and standard deviation
+n.zv=length(sm1)*((omega.zv*sd(d.zv))/((omega.zv*sd(d.zv))+(omega.pv*sd(d.pv))));n.zv
+n.pv=length(sm1)*((omega.pv*sd(d.pv))/((omega.zv*sd(d.zv))+(omega.pv*sd(d.pv))));n.pv
+
+# 6. sample each region
+d.zv.samp=sample(sm2[sm2<K],n.zv,replace=F)
+d.pv.samp=sample(sm2[sm2>K],n.pv,replace=F)
+
+# 7. define functions for each region
+f.zv=function(ST.in) ST.in*0
+f.pv=function(ST.in,k) ST.in-k
+
+# 8. estimate y
+y.hat=exp(-r*ttm)*sum(omega.zv*mean(f.zv(d.zv)),omega.pv*mean(f.pv(d.pv,K)));y.hat
+y.hat.var=sum(omega.zv^2/n.zv * var(d.zv.samp),omega.pv^2/n.pv * var(d.pv.samp));y.hat.var
+
+# 9. compare to baseline
+percent((c.sm.var-y.hat.var)/c.sm.var) # 93%
+
+# 10. compare to 
+valid.samp=sample(sm2,1000,replace=F)
+cv.sm=valid.samp-K; c.sm[cv.sm<0]=0
+cv.sm.mn=exp(-r*ttm)*mean(cv.sm) # 3.92
+cv.sm.var=var(cv.sm)/sqrt(N) # 0.44
+percent((cv.sm.var-y.hat.var)/cv.sm.var) # 96%
+
+```
+
+*Importance Sampling*
+
+Given $h(x)$ is the discounted payoff function and $f(x)$ is the risk-neutral probability density of a discrete path of underling assets, I need to find $\alpha=E[h(x)]=\int h(x) f(x) dx$. Treating $h$ as an indicator function i.e., $h(x)=1\{x \in A\}$ for $A \subset R^d$, then $\alpha = P(X \in A)$ and $h(x)f(x)/\alpha$ is the zero-variance conditional density of $X$ given $X \in A$. 
+
+Hence, I look for a density $g$ for $\alpha$ that approximates that zero-variance conditional density i.e., $g(x) \propto h(x)f(x)$. Per Glassermean et al (p137), I first use bisection to find $y$. I then use the "z" formulas (p136) to "back into" $\mu$. The graphics below illustrate that process for the first set of parameters in Glasserman table 5.1. The first two graphics show the results of two different appraoches to bisecting to find $y$. The third graphic shows the resulting $\mu$ vector values after backing into $z$ values. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. define path discretization function
+glasserman=function(s0,rand.vars,r,sigma,delta.t){
+     s.vals=S0
+     for(i in 1:(length(rand.vars)-1)){
+          s.vals[i+1]=s.vals[i]*exp(((r-(1/2)*sigma^2)*delta.t)+
+                                         (sigma*sqrt(delta.t)*rand.vars[i]))}
+     return(s.vals)
+}
+
+# 2. define payoff and breakeven functions
+G=function(r,ttm,sm,k){exp(-r*ttm)*max(sm-k,0)}
+f=function(sm,k,y) sm-k-y
+
+# 3. define table of parameters, results
+set=as.data.frame(matrix(data=c(
+     16,0.1,45,6.05,11,NA,NA,NA,NA,NA,
+     16,0.3,45,7.15,7,NA,NA,NA,NA,NA,
+     64,0.1,45,6.00,21,NA,NA,NA,NA,NA,
+     64,0.3,45,7.02,8.3,NA,NA,NA,NA,NA,
+     16,0.1,50,1.92,9.2,NA,NA,NA,NA,NA,
+     16,0.3,50,4.17,12,NA,NA,NA,NA,NA,
+     64,0.1,50,1.85,11,NA,NA,NA,NA,NA,
+     64,0.3,50,4.02,7.3,NA,NA,NA,NA,NA,
+     16,0.1,55,0.20,23,NA,NA,NA,NA,NA,
+     16,0.3,55,2.21,8.3,NA,NA,NA,NA,NA,
+     64,0.1,55,0.17,9.2,NA,NA,NA,NA,NA,
+     64,0.3,55,2.08,12,NA,NA,NA,NA,NA
+     ),nrow=12,ncol=10,byrow=T),stringsAsFactors=F)
+names(set)=c("path.len","sigma","K","prc.glass","v.r.glass",
+             "prc.base","var.base","prc.est","var.est","v.r.est")
+
+# 4. loop thru parameter table
+for(q in 1:dim(set)[1]){
+     
+     # a. initialize variables
+     K=set$K[q]
+     sigma=set$sigma[q]
+     path.len=set$path.len[q]
+     delta.t=ttm/path.len
+     
+     par(mfrow=c(1,3))          
+     # b. bisection approach 1
+     sm.path=y.path=y.mn=NULL
+     N=1000
+     
+     for(i in 1:N){
+          y.new=0
+          while(y.new==0){
+               rand.vals=rnorm(path.len)
+               sm=mean(glasserman(S0,rand.vals,r,sigma,delta.t))
+               y.new=G(0,ttm,sm,K)}
+          
+          sm.path[i]=sm; y.path[i]=y.new
+          
+          if(i>5){y.mn[i]=mean(tail(y.path,5))}}
+     
+     if(q==1){
+          y.opt=mean(y.mn,na.rm=T)
+          plot(y.path,type="l",main=paste("y*:",round(y.opt,2)))
+          abline(h=y.opt,col="red",lwd=2)}
+     
+     # c. bisection approach 2
+     sm.path=y.path=y.mn=NULL
+     
+     for(i in 1:N){
+          y.new=0
+          while(y.new==0){
+               rand.vals=rnorm(path.len)
+               sm=mean(glasserman(S0,rand.vals,r,sigma,delta.t))
+               y.new=G(0,ttm,sm,K)}
+          
+          sm.path[i]=sm; y.path[i]=y.new
+          
+          y.mn[i]=mean(y.path)}
+     
+     y.opt=tail(y.mn,1)
+     if(q==1){
+          plot(y.mn,type="l",main=paste("y*:",round(y.opt,2)))
+          abline(h=y.opt,col="red",lwd=2)}
+     
+     # d. back into z, mu
+     sm.opt=K+y.opt
+     
+     z=NULL
+     for(j in 1:path.len){
+          if(j==1){z[j]=(sigma*sqrt(delta.t)*(y.opt+K))/y.opt}
+          else{z[j]=z[j-1]-((sigma*sqrt(delta.t)*sm.opt)/(path.len*y.opt))}}
+     mu=z
+     if(q==1){plot(mu,type="l",main="mu")}
+     
+     # e. estimate price, variance
+     y.imp.vct=y.imp.scl=y.nrm.all=NULL;N=20000
+     
+     for(i in 1:N){
+          rand.vals=rnorm(path.len,mu)
+          path=glasserman(S0,rand.vals,r,sigma,delta.t)
+          y.imp.vct[i]=G(r,ttm,mean(path),K)*exp(-t(mu)%*%rand.vals+(1/2)*t(mu)%*%mu)
+          
+          rand.vals=rnorm(path.len)
+          path=glasserman(S0,rand.vals,r,sigma,delta.t)
+          y.nrm.all[i]=G(r,ttm,mean(path),K)}
+     
+     # f. format results table
+     set$prc.base[q]=round(mean(y.nrm.all),2)
+     set$var.base[q]=round(var(y.nrm.all)/sqrt(N),2)
+     
+     set$prc.est[q]=round(mean(y.imp.vct),2)
+     set$var.est[q]=round(var(y.imp.vct)/sqrt(N),2)
+     
+     set$v.r.est[q]=round((var(y.nrm.all)/sqrt(N))/(var(y.imp.vct)/sqrt(N)),1)
+}
+
+```
+
+I then use $\mu$ to change distribution of $Z$. This will result in an unbiased estimator of E[G(Z)], provided I weight each outcome by the appropriate likelihood ratio i.e., $E[G(Z)]=E_\mu [G(Z)e^{-\mu^T Z+\frac{1}{2}\mu^T \mu}$. The table below compares call price and variance estimates for this implementation with the results to Glasserman \textbf{table 5.1} ($N = 20,000$). Note: I re-ordered table entries cluster prices given K caused greatest swings.
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 5. output results table
+set[,c(1:6,8,10)] # note table entries re-ordered to cluster prices given K caused greatest swings
+
+```
+
+Finally, the plots below present graphically the price and variance reduction comparison between this implementation and Glasserman table 5.1. 
+
+```{r eval=TRUE,cache=TRUE,echo=FALSE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 6. plot price and variance comparison
+par(mfrow=c(1,2))
+plot(set$prc.glass,type="l",ylim=range(set[,c(4,6,8)]),main="prices",lwd=2)
+lines(set$prc.est,col="red",lwd=2)
+
+plot(set$v.r.glass,type="l",ylim=range(set[,c(5,10)]),main="variance reduction ratios",lwd=1)
+lines(set$v.r.est,col="red",lwd=1)
+abline(h=mean(set$v.r.glass),lwd=2)
+abline(h=mean(set$v.r.est),lwd=2,col="red")
+
+legend("topright",legend=c("for prior probs","for 'X' values"),col=c("black","red"),lwd=2,cex=0.75)
+# based on 20k runs (vs. 1M)
+
+```
+
+\textbf{code:}
+```{r eval=FALSE,cache=FALSE,echo=TRUE,message=FALSE,results='markup',warning=FALSE,fig.show='asis',fig.height=4,fig.width=7}
+
+# 1. define path discretization function
+glasserman=function(s0,rand.vars,r,sigma,delta.t){
+     s.vals=S0
+     for(i in 1:(length(rand.vars)-1)){
+          s.vals[i+1]=s.vals[i]*exp(((r-(1/2)*sigma^2)*delta.t)+
+                                         (sigma*sqrt(delta.t)*rand.vars[i]))}
+     return(s.vals)
+}
+
+# 2. define payoff and breakeven functions
+G=function(r,ttm,sm,k){exp(-r*ttm)*max(sm-k,0)}
+f=function(sm,k,y) sm-k-y
+
+# 3. define table of parameters, results
+set=as.data.frame(matrix(data=c(
+     16,0.1,45,6.05,11,NA,NA,NA,NA,NA,
+     16,0.3,45,7.15,7,NA,NA,NA,NA,NA,
+     64,0.1,45,6.00,21,NA,NA,NA,NA,NA,
+     64,0.3,45,7.02,8.3,NA,NA,NA,NA,NA,
+     16,0.1,50,1.92,9.2,NA,NA,NA,NA,NA,
+     16,0.3,50,4.17,12,NA,NA,NA,NA,NA,
+     64,0.1,50,1.85,11,NA,NA,NA,NA,NA,
+     64,0.3,50,4.02,7.3,NA,NA,NA,NA,NA,
+     16,0.1,55,0.20,23,NA,NA,NA,NA,NA,
+     16,0.3,55,2.21,8.3,NA,NA,NA,NA,NA,
+     64,0.1,55,0.17,9.2,NA,NA,NA,NA,NA,
+     64,0.3,55,2.08,12,NA,NA,NA,NA,NA
+     ),nrow=12,ncol=10,byrow=T),stringsAsFactors=F)
+names(set)=c("path.len","sigma","K","prc.glass","v.r.glass",
+             "prc.base","var.base","prc.est","var.est","v.r.est")
+
+# 4. loop thru parameter table
+for(q in 1:dim(set)[1]){
+     
+     # a. initialize variables
+     K=set$K[q]
+     sigma=set$sigma[q]
+     path.len=set$path.len[q]
+     delta.t=ttm/path.len
+     
+     par(mfrow=c(1,3))          
+     # b. bisection approach 1
+     sm.path=y.path=y.mn=NULL
+     N=1000
+     
+     for(i in 1:N){
+          y.new=0
+          while(y.new==0){
+               rand.vals=rnorm(path.len)
+               sm=mean(glasserman(S0,rand.vals,r,sigma,delta.t))
+               y.new=G(0,ttm,sm,K)}
+          
+          sm.path[i]=sm; y.path[i]=y.new
+          
+          if(i>5){y.mn[i]=mean(tail(y.path,5))}}
+     
+     if(q==1){
+          y.opt=mean(y.mn,na.rm=T)
+          plot(y.path,type="l",main=paste("y*:",round(y.opt,2)))
+          abline(h=y.opt,col="red",lwd=2)}
+     
+     # c. bisection approach 2
+     sm.path=y.path=y.mn=NULL
+     
+     for(i in 1:N){
+          y.new=0
+          while(y.new==0){
+               rand.vals=rnorm(path.len)
+               sm=mean(glasserman(S0,rand.vals,r,sigma,delta.t))
+               y.new=G(0,ttm,sm,K)}
+          
+          sm.path[i]=sm; y.path[i]=y.new
+          
+          y.mn[i]=mean(y.path)}
+     
+     y.opt=tail(y.mn,1)
+     if(q==1){
+          plot(y.mn,type="l",main=paste("y*:",round(y.opt,2)))
+          abline(h=y.opt,col="red",lwd=2)}
+     
+     # d. back into z, mu
+     sm.opt=K+y.opt
+     
+     z=NULL
+     for(j in 1:path.len){
+          if(j==1){z[j]=(sigma*sqrt(delta.t)*(y.opt+K))/y.opt}
+          else{z[j]=z[j-1]-((sigma*sqrt(delta.t)*sm.opt)/(path.len*y.opt))}}
+     mu=z
+     if(q==1){plot(mu,type="l",main="mu")}
+     
+     # e. estimate price, variance
+     y.imp.vct=y.imp.scl=y.nrm.all=NULL;N=20000
+     
+     for(i in 1:N){
+          rand.vals=rnorm(path.len,mu)
+          path=glasserman(S0,rand.vals,r,sigma,delta.t)
+          y.imp.vct[i]=G(r,ttm,mean(path),K)*exp(-t(mu)%*%rand.vals+(1/2)*t(mu)%*%mu)
+          
+          rand.vals=rnorm(path.len)
+          path=glasserman(S0,rand.vals,r,sigma,delta.t)
+          y.nrm.all[i]=G(r,ttm,mean(path),K)}
+     
+     # f. format results table
+     set$prc.base[q]=round(mean(y.nrm.all),2)
+     set$var.base[q]=round(var(y.nrm.all)/sqrt(N),2)
+     
+     set$prc.est[q]=round(mean(y.imp.vct),2)
+     set$var.est[q]=round(var(y.imp.vct)/sqrt(N),2)
+     
+     set$v.r.est[q]=round((var(y.nrm.all)/sqrt(N))/(var(y.imp.vct)/sqrt(N)),1)
+}
+
+# 5. output results table
+set[,c(1:6,8,10)] 
+
+# 6. plot price and variance comparison
+par(mfrow=c(1,2))
+plot(set$prc.glass,type="l",ylim=range(set[,c(4,6,8)]),main="prices",lwd=2)
+lines(set$prc.est,col="red",lwd=2)
+
+plot(set$v.r.glass,type="l",ylim=range(set[,c(5,10)]),main="variance reduction ratios",lwd=1)
+lines(set$v.r.est,col="red",lwd=1)
+abline(h=mean(set$v.r.glass),lwd=2)
+abline(h=mean(set$v.r.est),lwd=2,col="red")
+
+legend("topright",legend=c("for prior probs","for 'X' values"),col=c("black","red"),lwd=2,cex=0.75)
+# based on 20k runs (vs. 1M)
+
+```
+
